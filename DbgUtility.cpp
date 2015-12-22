@@ -31,8 +31,10 @@ HANDLE DbgUtility::GetWindowsHandle()
 
 bool DbgUtility::doDebuggerProc()
 {
-    if (DbgUtility::doDebuggerProc(m_targetFileName, m_procInfo, m_startInfo)) return true;
-    else return false;
+    if (DbgUtility::doDebuggerProc(m_targetFileName, m_procInfo, m_startInfo))
+        return true;
+    else
+        return false;
 }
 
 void DbgUtility::setTargetFileName(const char *file_name)
@@ -64,7 +66,9 @@ DWORD DbgUtility::getProcessIdFromeName(std::string& process_name)
     PROCESSENTRY32 pe32 = { 0, };
     pe32.dwSize = sizeof(pe32);
 
-    if (hSnapshot == INVALID_HANDLE_VALUE) return NULL;
+    if (hSnapshot == INVALID_HANDLE_VALUE)
+        return NULL;
+
     if (!Process32First(hSnapshot, &pe32))
     {
         CloseHandle(hSnapshot);
