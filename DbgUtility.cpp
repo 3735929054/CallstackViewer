@@ -6,12 +6,18 @@
 #include <Psapi.h>
 #include <tchar.h>
 
+// macro
 #define BUFSIZE 512
 
+// functions
 DbgUtility::DbgUtility(std::string file_name)
 {
     ZeroMemory(&m_procInfo, sizeof(m_procInfo));
     ZeroMemory(&m_startInfo, sizeof(m_startInfo));
+
+    onBreakpoint = nullptr;
+    onCreateProcess = nullptr;
+    onExitProcess = nullptr;
     m_targetFileName = file_name;
 }
 
@@ -31,10 +37,106 @@ HANDLE DbgUtility::GetWindowsHandle()
 
 bool DbgUtility::doDebuggerProc()
 {
-    if (DbgUtility::doDebuggerProc(m_targetFileName, m_procInfo, m_startInfo))
-        return true;
-    else
-        return false;
+    struct stat statBuf;
+    if (stat(m_targetFileName.c_str(), &statBuf) == 0)
+    {
+        // 프로세스 생성
+        if (!CreateProcessA(
+            m_targetFileName.c_str(),
+            NULL,
+            NULL,
+            NULL,
+            FALSE,
+            DEBUG_ONLY_THIS_PROCESS,
+            NULL,
+            NULL,
+            &m_startInfo,
+            &m_procInfo))
+        {
+            DbgUtility::dbgPrint("CreateProcess() Failed!");
+            return false; // 프로세스의 생성을 실패했을 때.
+        }
+
+        DEBUG_EVENT dbgEvent;
+        ZeroMemory(&dbgEvent, sizeof(dbgEvent));
+        while (true)
+        {
+            if (!WaitForDebugEvent(&dbgEvent, INFINITE))
+            {
+                DbgUtility::dbgPrint("WaitForDebugEvent() Failed !");
+                return false;
+            }
+
+            switch (dbgEvent.dwDebugEventCode)
+            {
+            case EXCEPTION_DEBUG_EVENT:
+                switch (dbgEvent.u.Exception.ExceptionRecord.ExceptionCode)
+                {
+                case EXCEPTION_BREAKPOINT:
+                    CONTEXT context;
+                    context.ContextFlags = CONTEXT_ALL;
+                    GetThreadContext(m_procInfo.hThread, &context);
+                    context.Eip--;
+                    SetThreadContext(m_procInfo.hThread, &context);
+
+                    if (nullptr != onBreakpoint) onBreakpoint();
+                    break;
+                default:
+                    break;
+                }
+                break;
+            case CREATE_THREAD_DEBUG_EVENT:
+                DbgUtility::dbgPrint(
+                    "[CREATED] Thread 0x%x(0x%x) at 0x%x",
+                    dbgEvent.u.CreateThread.hThread,
+                    dbgEvent.dwThreadId,
+                    dbgEvent.u.CreateThread.lpStartAddress);
+                break;
+            case LOAD_DLL_DEBUG_EVENT:
+                if (dbgEvent.u.LoadDll.hFile)
+                {
+                    char szFilePath[MAX_PATH] = { 0, };
+                    char *pszFileName = nullptr;
+                    strcpy_s(szFilePath, sizeof(szFilePath), DbgUtility::getFileNameFromeHandle(dbgEvent.u.LoadDll.hFile).c_str());
+                    for (int i = strlen(szFilePath); i > 0; --i)
+                        if ('\\' == szFilePath[i] || '/' == szFilePath[i])
+                        {
+                            pszFileName = &szFilePath[i + 1];
+                            break;
+                        }
+
+                    loadDllInfo dllInfo = { pszFileName, dbgEvent.u.LoadDll.lpBaseOfDll };
+                    DbgUtility::dbgPrint("[LOADED] %s at %x", dllInfo.pName, dllInfo.lpBaseAddr);
+                    loadDllList.push_back(dllInfo);
+                }
+                break;
+            case UNLOAD_DLL_DEBUG_EVENT:
+                // unload된 dll의 주소값을 이용해 이름 찾기.
+                for (auto iter = loadDllList.begin(); iter != loadDllList.end(); ++iter)
+                {
+                    if (iter->lpBaseAddr == dbgEvent.u.UnloadDll.lpBaseOfDll)
+                    {
+                        DbgUtility::dbgPrint("[UNLOADED] %s at %x", iter->pName, iter->lpBaseAddr);
+                        loadDllList.erase(iter);
+                        break;
+                    }
+                }
+                break;
+            case CREATE_PROCESS_DEBUG_EVENT:
+                if (nullptr != onCreateProcess) onCreateProcess();
+                DbgUtility::dbgPrint("CREATE_PROCESS_DEBUG_EVENT");
+                break;
+            case EXIT_PROCESS_DEBUG_EVENT:
+                if (nullptr != onExitProcess) onExitProcess();
+                DbgUtility::dbgPrint("EXIT_PROCESS_DEBUG_EVENT");
+                return true; // 프로세스가 종료 되었을 때.
+            default:
+                break;
+            }
+            ContinueDebugEvent(dbgEvent.dwProcessId, dbgEvent.dwThreadId, DBG_CONTINUE);
+        }
+    }
+    return false; // 파일이 없을 경우.
 }
 
 void DbgUtility::setTargetFileName(const char *file_name)
@@ -54,10 +156,10 @@ std::string DbgUtility::GetTargetFileName()
 
 bool DbgUtility::checkRemoteDbgPresent(HANDLE hProc)
 {
-    BOOL debug_state = false;
-    CheckRemoteDebuggerPresent(hProc, &debug_state);
+    BOOL bDbgState = false;
+    CheckRemoteDebuggerPresent(hProc, &bDbgState);
 
-    return (debug_state) ? true : false;
+    return (bDbgState) ? true : false;
 }
 
 DWORD DbgUtility::getProcessIdFromeName(std::string& process_name)
@@ -86,101 +188,41 @@ DWORD DbgUtility::getProcessIdFromeName(std::string& process_name)
 
 HANDLE DbgUtility::getWindowsHandleFromeName(std::string& process_name)
 {
-    const DWORD target_process_id = DbgUtility::getProcessIdFromeName(process_name);
-    HANDLE  temporary_wnd_handle = FindWindow(NULL, NULL);
-    DWORD   temporary_process_id = 0;
+    const DWORD dwDestProcId = DbgUtility::getProcessIdFromeName(process_name);
+    HANDLE  hTempWnd = FindWindow(NULL, NULL);
+    DWORD   dwTempProcId = 0;
 
-    while (temporary_wnd_handle != NULL)
+    while (hTempWnd != NULL)
     {
-        GetWindowThreadProcessId(static_cast<HWND>(temporary_wnd_handle), &temporary_process_id);
-        if (target_process_id == temporary_process_id)
+        GetWindowThreadProcessId(static_cast<HWND>(hTempWnd), &dwTempProcId);
+        if (dwDestProcId == dwTempProcId)
         {
-            return temporary_wnd_handle;
+            return hTempWnd;
         }
-        temporary_wnd_handle = GetWindow(static_cast<HWND>(temporary_wnd_handle), GW_HWNDNEXT);
+        hTempWnd = GetWindow(static_cast<HWND>(hTempWnd), GW_HWNDNEXT);
     }
 
     return NULL;
 }
 
-bool DbgUtility::doDebuggerProc(std::string& file_name, PROCESS_INFORMATION& process_info, STARTUPINFO& startup_info)
-{
-    struct stat stat_buf;
-
-    if (stat(file_name.c_str(), &stat_buf) == 0)
-    {
-        // 프로세스 생성
-        if (!CreateProcessA(file_name.c_str(),
-            NULL,
-            NULL,
-            NULL,
-            FALSE,
-            DEBUG_PROCESS,
-            NULL,
-            NULL,
-            &startup_info,
-            &process_info))
-        {
-            DbgUtility::dbgPrint("CreateProcess() Failed!");
-            return false; // 프로세스의 생성을 실패했을 때.
-        }
-
-        DEBUG_EVENT dbgEvent;
-        ZeroMemory(&dbgEvent, sizeof(dbgEvent));
-        while (true)
-        {
-            if (!WaitForDebugEvent(&dbgEvent, INFINITE))
-            {
-                DbgUtility::dbgPrint("Failed WaitForDebugEvent()!");
-                return false;
-            }
-
-            switch (dbgEvent.dwDebugEventCode)
-            {
-            case CREATE_PROCESS_DEBUG_EVENT:
-                DbgUtility::dbgPrint("CREATE_PROCESS_DEBUG_EVENT");
-                break;
-            case LOAD_DLL_DEBUG_EVENT:
-                if (dbgEvent.u.LoadDll.hFile)
-                {
-                    char szFilePath[MAX_PATH] = { 0, };
-                    char *pszFileName = nullptr;
-                    strcpy_s(szFilePath, sizeof(szFilePath), DbgUtility::getFileNameFromeHandle(dbgEvent.u.LoadDll.hFile).c_str());
-                    for (int i = strlen(szFilePath); i > 0; --i)
-                        if ('\\' == szFilePath[i] || '/' == szFilePath[i])
-                        {
-                            pszFileName = &szFilePath[i + 1];
-                            break;
-                        }
-                    DbgUtility::dbgPrint(pszFileName);
-                }
-                break;
-            case EXIT_PROCESS_DEBUG_EVENT:
-                return true; // 프로세스가 종료 되었을 때.
-            default:
-                break;
-            }
-            ContinueDebugEvent(dbgEvent.dwProcessId, dbgEvent.dwThreadId, DBG_CONTINUE);
-        }
-    }
-    return false; // 파일이 없을 경우.
-}
-
 void DbgUtility::dbgPrint(const char *format, ...)
 {
     va_list arg_list;
+    char tmp[1024] = { 0, };
     va_start(arg_list, format);
-    char tmp[2000] = { 0, };
-    wsprintf(tmp, format, arg_list);
+    vsprintf_s(tmp, sizeof(tmp), format, arg_list);
+    va_end(arg_list);
+
     OutputDebugString(tmp);
 }
 
 void DbgUtility::dbgPrint(const wchar_t *format, ...)
 {
     va_list arg_list;
+    wchar_t tmp[1024] = { 0, };
     va_start(arg_list, format);
-    wchar_t tmp[2000] = { 0, };
-    wsprintfW(tmp, format, arg_list);
+    vswprintf_s(tmp, sizeof(tmp) / sizeof(wchar_t), format, arg_list);
+
     OutputDebugStringW(tmp);
 }
 
@@ -274,4 +316,25 @@ std::string DbgUtility::getFileNameFromeHandle(HANDLE hFile)
     }
 
     return(pszFilename);
+}
+
+UINT DbgUtility::setBreakpoints()
+{
+    BYTE byte;
+    originalOpInfo opInfo;
+    FILE *fp;
+    fopen_s(&fp, m_targetFileName.c_str(), "rb");
+    
+    // 0xE8
+    while ((byte = fgetc(fp)) != EOF)
+    {
+        if (CALL_1 == byte)
+        {
+            opInfo.chOpcode = byte;
+            DWORD raw = (ftell(fp) - 1) - ;
+            opInfo.dwAddress = 
+        }
+    }
+
+    // 0xFF15
 }
