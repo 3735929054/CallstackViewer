@@ -30,7 +30,7 @@ class DbgUtility
 public:
     // *NON-STATIC
         // variable
-    std::function<void()> onBreakpoint, onCreateProcess, onExitProcess;
+    std::function<void(DEBUG_EVENT& dbgevent)> onBreakpoint, onCreateProcess, onExitProcess;
 
         // functions
     DbgUtility(std::string process_name = "");
@@ -40,8 +40,8 @@ public:
     HANDLE GetWindowsHandle();
     void setTargetFileName(const char *file_name);
     void setTargetFileName(std::string& file_name);
-    UINT setBreakpoints();
-
+    void setSingleStep(bool enable);
+    CONTEXT getCurrentDebuggeeContext();
     // *STATIC
         // variables
     
@@ -54,9 +54,18 @@ public:
     static std::string getFileNameFromeHandle(HANDLE hFile);
 
 private:
-    std::string m_targetFileName;
+    std::string m_filePath;
     PROCESS_INFORMATION m_procInfo;
     STARTUPINFO m_startInfo;
     std::list<loadDllInfo> loadDllList;
     std::list<originalOpInfo> replacedOpcodeList;
+    bool m_singleStep;
+
+    CONTEXT m_context;
+    LPVOID m_oep;
+    HANDLE m_module;
+    BYTE m_breakPoint, m_INT3;
+    FILE *m_out;
+
+    void saveCurrentOpcode(CONTEXT& context);
 };
