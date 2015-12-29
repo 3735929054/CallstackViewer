@@ -2,12 +2,8 @@
 
 #include <TlHelp32.h>
 #include <wchar.h>
-#include <Windows.h>
 #include <Psapi.h>
 #include <tchar.h>
-#include "PEparser.h"
-#include <stdlib.h>
-#include <conio.h>
 
 // macro
 #define BUFSIZE 512
@@ -15,34 +11,26 @@
 // functions
 DbgUtility::DbgUtility(std::string file_name) : m_INT3(0xcc)
 {
-    ZeroMemory(&m_procInfo, sizeof(m_procInfo));
+    ZeroMemory(&processInformation, sizeof(processInformation));
     ZeroMemory(&m_startInfo, sizeof(m_startInfo));
 
-    onBreakpoint = nullptr;
-    onCreateProcess = nullptr;
-    onExitProcess = nullptr;
     m_filePath = file_name;
-
-    fopen_s(&m_out, "eipRecord.txt", "w");
-    m_context.ContextFlags = CONTEXT_FULL | CONTEXT_DEBUG_REGISTERS;
-
+    context.ContextFlags = CONTEXT_FULL | CONTEXT_DEBUG_REGISTERS;
     m_singleStep = false;
 }
 
 DbgUtility::~DbgUtility()
 {
-    if (NULL != m_procInfo.hProcess)
+    if (NULL != processInformation.hProcess)
     {
-        CloseHandle(m_procInfo.hProcess);
-        CloseHandle(m_procInfo.hThread);
+        CloseHandle(processInformation.hProcess);
+        CloseHandle(processInformation.hThread);
     }
-
-    fclose(m_out);
 }
 
 HANDLE DbgUtility::GetWindowsHandle()
 {
-    return m_procInfo.hProcess;
+    return processInformation.hProcess;
 }
 
 bool DbgUtility::doDebuggerProc()
@@ -61,14 +49,14 @@ bool DbgUtility::doDebuggerProc()
             NULL,
             NULL,
             &m_startInfo,
-            &m_procInfo))
+            &processInformation))
         {
             DbgUtility::dbgPrint("CreateProcess() Failed!");
             return false; // 프로세스의 생성을 실패했을 때.
         }
         
-        m_parser.setFilePath(m_filePath.c_str());
-        m_parser.parse();
+        peParser.setFilePath(m_filePath.c_str());
+        peParser.parse();
         DWORD dwContinueDebugStatus = DBG_CONTINUE;
         while (dwContinueDebugStatus)
         {
@@ -81,9 +69,10 @@ bool DbgUtility::doDebuggerProc()
                 m_module = (HMODULE)(debugEvent.u.CreateProcessInfo.lpBaseOfImage);
                 CloseHandle(debugEvent.u.CreateProcessInfo.hFile);
                 printf("CREATE_PROCESS_DEBUG_EVENT @%p OEP=%p\n", m_module, m_oep);
+                onCreateProcess(debugEvent);
                 break;
             case EXCEPTION_DEBUG_EVENT:
-                GetThreadContext(m_procInfo.hThread, &m_context);
+                GetThreadContext(processInformation.hThread, &context);
                 switch (debugEvent.u.Exception.ExceptionRecord.ExceptionCode)
                 {
                 case EXCEPTION_BREAKPOINT:
@@ -91,30 +80,33 @@ bool DbgUtility::doDebuggerProc()
                     {
                         if (debugEvent.u.Exception.ExceptionRecord.ExceptionAddress == m_oep)
                         {
-                            LPVOID IP = (LPVOID)(--m_context.Eip);
-                            WriteProcessMemory(m_procInfo.hProcess, IP, &m_breakPoint, 1, NULL);
-                            FlushInstructionCache(m_procInfo.hProcess, IP, 1);
-                            if(m_singleStep) m_context.EFlags |= 0x100; // set trap flag bit
-                            saveCurrentOpcode(m_context);
+                            LPVOID IP = (LPVOID)(--context.Eip);
+                            WriteProcessMemory(processInformation.hProcess, IP, &m_breakPoint, 1, NULL);
+                            FlushInstructionCache(processInformation.hProcess, IP, 1);
+                            if(m_singleStep) context.EFlags |= 0x100; // set trap flag bit
+                            onExcuteOnceInstruction(debugEvent);
                         }
                         else {
-                            ReadProcessMemory(m_procInfo.hProcess, m_oep, &m_breakPoint, 1, NULL);
-                            WriteProcessMemory(m_procInfo.hProcess, m_oep, &m_INT3, 1, NULL);
-                            FlushInstructionCache(m_procInfo.hProcess, m_oep, 1);
+                            ReadProcessMemory(processInformation.hProcess, m_oep, &m_breakPoint, 1, NULL);
+                            WriteProcessMemory(processInformation.hProcess, m_oep, &m_INT3, 1, NULL);
+                            FlushInstructionCache(processInformation.hProcess, m_oep, 1);
                         }
                     }
                     break;
                 case EXCEPTION_SINGLE_STEP:
-                    if (m_singleStep) m_context.EFlags |= 0x100; // set trap flag bit
-                    saveCurrentOpcode(m_context);
+                    if (m_singleStep) context.EFlags |= 0x100; // set trap flag bit
+                    onExcuteOnceInstruction(debugEvent);
+
                     break;
                 }
-                m_context.Dr6 = 0;
-                SetThreadContext(m_procInfo.hThread, &m_context);
+                context.Dr6 = 0;
+                SetThreadContext(processInformation.hThread, &context);
                 break;
             case EXIT_PROCESS_DEBUG_EVENT:
                 dwContinueDebugStatus = 0;
                 printf("EXIT_PROCESS_DEBUG_EVENT\n");
+                onExitProcess(debugEvent);
+
                 return true;
             case LOAD_DLL_DEBUG_EVENT:
                 CloseHandle(debugEvent.u.LoadDll.hFile);
@@ -126,12 +118,12 @@ bool DbgUtility::doDebuggerProc()
     return false; // 파일이 없을 경우.
 }
 
-void DbgUtility::setTargetFileName(const char *file_name)
+void DbgUtility::setFilePath(const char *file_name)
 {
     m_filePath = file_name;
 }
 
-void DbgUtility::setTargetFileName(std::string& file_name)
+void DbgUtility::setFilePath(std::string& file_name)
 {
     m_filePath = file_name;
 }
@@ -307,43 +299,19 @@ std::string DbgUtility::getFileNameFromeHandle(HANDLE hFile)
 
 CONTEXT DbgUtility::getCurrentDebuggeeContext()
 {
-    return m_context;
+    return context;
 }
 
-void DbgUtility::saveCurrentOpcode(CONTEXT& context)
+void DbgUtility::setSingleStep(bool _enable)
 {
-    BYTE arrInstruction[6] = { NULL, };
-    char buf[256];
-    DWORD dwMemAddr;
-    DWORD dwFuncAddr;
-
-    ReadProcessMemory(m_procInfo.hProcess, (LPVOID)context.Eip, arrInstruction, 6, NULL);
-    if (0xe8 == arrInstruction[0])
-    {
-        memcpy_s(&dwMemAddr, sizeof(dwMemAddr), &arrInstruction[1], 4);
-        ReadProcessMemory(m_procInfo.hProcess, (LPVOID)dwMemAddr, &dwFuncAddr, 4, NULL);
-        sprintf_s(buf, sizeof(buf), "[%p] %s:%p\n", context.Eip, m_parser.getProcNameWidthAddr(dwFuncAddr).c_str(), dwFuncAddr);
-    }
-    else if (!memcmp(arrInstruction, "\xff\x15", 2))
-    {
-        memcpy_s(&dwMemAddr, sizeof(dwMemAddr), &arrInstruction[2], 4);
-        ReadProcessMemory(m_procInfo.hProcess, (LPVOID)dwMemAddr, &dwFuncAddr, 4, NULL);
-        sprintf_s(buf, sizeof(buf), "[%p] %s:%p\n", context.Eip, m_parser.getProcNameWidthAddr(dwFuncAddr).c_str(), dwFuncAddr);
-    }
-    else if (!memcmp(arrInstruction, "\xff\x25", 2))
-    {
-        memcpy_s(&dwMemAddr, sizeof(dwMemAddr), &arrInstruction[2], 4);
-        ReadProcessMemory(m_procInfo.hProcess, (LPVOID)dwMemAddr, &dwFuncAddr, 4, NULL);
-        sprintf_s(buf, sizeof(buf), "[%p] %s:%p\n", context.Eip, m_parser.getProcNameWidthAddr(dwFuncAddr).c_str(), dwFuncAddr);
-    }
-    else {
-        return;
-    }
-
-    if(!strstr(buf, "(unknown)")) fputs(buf, m_out);
+    m_singleStep = _enable;
 }
 
-void DbgUtility::setSingleStep(bool enable)
+PROCESS_INFORMATION DbgUtility::getDebuggeeProcInfo()
 {
-    m_singleStep = enable;
+    return processInformation;
 }
+
+void DbgUtility::onExcuteOnceInstruction(DEBUG_EVENT& _event){}
+void DbgUtility::onCreateProcess(DEBUG_EVENT& _event){}
+void DbgUtility::onExitProcess(DEBUG_EVENT& _event){}

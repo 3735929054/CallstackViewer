@@ -29,9 +29,12 @@ enum OPCODE_SET
 class DbgUtility
 {
 public:
+    virtual void onExcuteOnceInstruction(DEBUG_EVENT& _event);
+    virtual void onCreateProcess(DEBUG_EVENT& _event);
+    virtual void onExitProcess(DEBUG_EVENT& _event);
+
     // *NON-STATIC
         // variable
-    std::function<void(DEBUG_EVENT& dbgevent)> onBreakpoint, onCreateProcess, onExitProcess;
 
         // functions
     DbgUtility(std::string process_name = "");
@@ -39,10 +42,11 @@ public:
     bool doDebuggerProc();
     std::string GetTargetFileName();
     HANDLE GetWindowsHandle();
-    void setTargetFileName(const char *file_name);
-    void setTargetFileName(std::string& file_name);
-    void setSingleStep(bool enable);
+    void setFilePath(const char *file_name);
+    void setFilePath(std::string& file_name);
+    void setSingleStep(bool _enable);
     CONTEXT getCurrentDebuggeeContext();
+    PROCESS_INFORMATION getDebuggeeProcInfo();
     // *STATIC
         // variables
     
@@ -56,18 +60,17 @@ public:
 
 private:
     std::string m_filePath;
-    PROCESS_INFORMATION m_procInfo;
     STARTUPINFO m_startInfo;
     std::list<loadDllInfo> loadDllList;
     std::list<originalOpInfo> replacedOpcodeList;
     bool m_singleStep;
-    PEparser m_parser;
-
-    CONTEXT m_context;
+    
     LPVOID m_oep;
     HANDLE m_module;
     BYTE m_breakPoint, m_INT3;
-    FILE *m_out;
 
-    void saveCurrentOpcode(CONTEXT& context);
+protected:
+    CONTEXT context;
+    PROCESS_INFORMATION processInformation;
+    PEparser peParser;
 };
