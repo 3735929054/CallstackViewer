@@ -4,6 +4,7 @@
 #include <functional>
 #include <string>
 #include <list>
+#include "PEparser.h"
 
 // 로드된 dll의 정보(이름, 주소)를 저장할 구조체
 typedef struct LOAD_DLL_INFO
@@ -60,6 +61,7 @@ private:
     std::list<loadDllInfo> loadDllList;
     std::list<originalOpInfo> replacedOpcodeList;
     bool m_singleStep;
+    PEparser m_parser;
 
     CONTEXT m_context;
     LPVOID m_oep;

@@ -1,5 +1,6 @@
 #include <iostream>
 #include "DbgUtility.h"
+#include "PEparser.h"
 #include <ctime>
 
 int main(int argc, char *argv[])
@@ -8,6 +9,18 @@ int main(int argc, char *argv[])
     {
         std::cout << "Usage: " << argv[0] << "\\[PROGRAM PATH]" << std::endl;;
         return -1;
+    }
+
+    PEparser parser;
+    parser.setFilePath(argv[1]);
+    parser.parse();
+    std::list<iatInformation> list = parser.getIatInformationList();
+
+    auto iter = list.begin();
+    while (iter != list.end())
+    {
+        DbgUtility::dbgPrint("[%p] %s", iter->dwAddress, iter->szFuncName.c_str());
+        iter++;
     }
 
     DbgUtility dbg_utility;

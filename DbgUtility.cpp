@@ -6,6 +6,8 @@
 #include <Psapi.h>
 #include <tchar.h>
 #include "PEparser.h"
+#include <stdlib.h>
+#include <conio.h>
 
 // macro
 #define BUFSIZE 512
@@ -65,6 +67,8 @@ bool DbgUtility::doDebuggerProc()
             return false; // 프로세스의 생성을 실패했을 때.
         }
         
+        m_parser.setFilePath(m_filePath.c_str());
+        m_parser.parse();
         DWORD dwContinueDebugStatus = DBG_CONTINUE;
         while (dwContinueDebugStatus)
         {
@@ -308,26 +312,35 @@ CONTEXT DbgUtility::getCurrentDebuggeeContext()
 
 void DbgUtility::saveCurrentOpcode(CONTEXT& context)
 {
-    BYTE call1 = NULL;
-    BYTE call2[2] = { NULL, };
-    BYTE cmp[2] = { 0xff, 0x15 };
-    char buf[30];
+    BYTE arrInstruction[6] = { NULL, };
+    char buf[256];
+    DWORD dwMemAddr;
+    DWORD dwFuncAddr;
 
-    ReadProcessMemory(m_procInfo.hProcess, (LPVOID)context.Eip, &call1, 1, NULL);
-    ReadProcessMemory(m_procInfo.hProcess, (LPVOID)context.Eip, call2, 2, NULL);
-        
-    if (0xe8 == call1)
+    ReadProcessMemory(m_procInfo.hProcess, (LPVOID)context.Eip, arrInstruction, 6, NULL);
+    if (0xe8 == arrInstruction[0])
     {
-        sprintf_s(buf, 30, "[%p] %02X\n", context.Eip, call1);
+        memcpy_s(&dwMemAddr, sizeof(dwMemAddr), &arrInstruction[1], 4);
+        ReadProcessMemory(m_procInfo.hProcess, (LPVOID)dwMemAddr, &dwFuncAddr, 4, NULL);
+        sprintf_s(buf, sizeof(buf), "[%p] %s:%p\n", context.Eip, m_parser.getProcNameWidthAddr(dwFuncAddr).c_str(), dwFuncAddr);
     }
-    else if (!memcmp(call2, cmp, 2))
+    else if (!memcmp(arrInstruction, "\xff\x15", 2))
     {
-        sprintf_s(buf, 30, "[%p] %X%X\n", context.Eip, call2[0], call2[1]);
+        memcpy_s(&dwMemAddr, sizeof(dwMemAddr), &arrInstruction[2], 4);
+        ReadProcessMemory(m_procInfo.hProcess, (LPVOID)dwMemAddr, &dwFuncAddr, 4, NULL);
+        sprintf_s(buf, sizeof(buf), "[%p] %s:%p\n", context.Eip, m_parser.getProcNameWidthAddr(dwFuncAddr).c_str(), dwFuncAddr);
+    }
+    else if (!memcmp(arrInstruction, "\xff\x25", 2))
+    {
+        memcpy_s(&dwMemAddr, sizeof(dwMemAddr), &arrInstruction[2], 4);
+        ReadProcessMemory(m_procInfo.hProcess, (LPVOID)dwMemAddr, &dwFuncAddr, 4, NULL);
+        sprintf_s(buf, sizeof(buf), "[%p] %s:%p\n", context.Eip, m_parser.getProcNameWidthAddr(dwFuncAddr).c_str(), dwFuncAddr);
     }
     else {
         return;
     }
-    fputs(buf, m_out);
+
+    if(!strstr(buf, "(unknown)")) fputs(buf, m_out);
 }
 
 void DbgUtility::setSingleStep(bool enable)
