@@ -29,7 +29,7 @@ bool PEparser::parse()
 
     FILE *in;
     if (fopen_s(&in, m_filePath.c_str(), "rb"))
-        return EXIT_FAILURE;
+        return false;
 
     // Get file size
     fseek(in, 0, SEEK_END);
@@ -95,6 +95,8 @@ bool PEparser::parse()
 
     delete[] fileBuffer;
     fclose(in);
+
+    return true;
 }
 
 IMAGE_NT_HEADERS PEparser::getNtHeader()

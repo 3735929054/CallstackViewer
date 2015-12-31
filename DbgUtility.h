@@ -33,24 +33,21 @@ public:
     virtual void onCreateProcess(DEBUG_EVENT& _event);
     virtual void onExitProcess(DEBUG_EVENT& _event);
 
-    // *NON-STATIC
-        // variable
-
-        // functions
     DbgUtility(std::string process_name = "");
     ~DbgUtility();
-    bool doDebuggerProc();
+
+    bool start();
+    void stop();
+    void resume();
+
     std::string GetTargetFileName();
     HANDLE GetWindowsHandle();
     void setFilePath(const char *file_name);
     void setFilePath(std::string& file_name);
-    void setSingleStep(bool _enable);
+    void setTrapFlag(bool _enable);
     CONTEXT getCurrentDebuggeeContext();
     PROCESS_INFORMATION getDebuggeeProcInfo();
-    // *STATIC
-        // variables
-    
-        // functions
+
     static void dbgPrint(const char *format, ...);
     static void dbgPrint(const wchar_t *format, ...);
     static DWORD getProcessIdFromeName(std::string& process_name);
@@ -63,7 +60,10 @@ private:
     STARTUPINFO m_startInfo;
     std::list<loadDllInfo> loadDllList;
     std::list<originalOpInfo> replacedOpcodeList;
-    bool m_singleStep;
+
+    bool m_trapFlag;
+    bool m_stop;
+    bool m_resume;
     
     LPVOID m_oep;
     HANDLE m_module;
