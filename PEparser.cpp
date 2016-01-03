@@ -4,6 +4,7 @@ PEparser::PEparser(const char *_path)
 {
     m_filePath = _path;
     m_fileSize = 0;
+
     ZeroMemory(&m_dosHeader, sizeof(m_dosHeader));
     ZeroMemory(&m_sectionHeaders, sizeof(m_sectionHeaders));
     ZeroMemory(&m_ntHeader, sizeof(m_ntHeader));

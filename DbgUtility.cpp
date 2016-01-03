@@ -11,11 +11,11 @@
 // functions
 DbgUtility::DbgUtility(std::string file_name) : m_INT3(0xcc)
 {
-    ZeroMemory(&processInformation, sizeof(processInformation));
+    ZeroMemory(&dbgProcInfo, sizeof(dbgProcInfo));
     ZeroMemory(&m_startInfo, sizeof(m_startInfo));
 
     m_filePath = file_name;
-    context.ContextFlags = CONTEXT_FULL | CONTEXT_DEBUG_REGISTERS;
+    dbgContext.ContextFlags = CONTEXT_FULL | CONTEXT_DEBUG_REGISTERS;
     m_trapFlag = false;
     m_stop = false;
     m_resume = true;
@@ -23,16 +23,16 @@ DbgUtility::DbgUtility(std::string file_name) : m_INT3(0xcc)
 
 DbgUtility::~DbgUtility()
 {
-    if (NULL != processInformation.hProcess)
+    if (NULL != dbgProcInfo.hProcess)
     {
-        CloseHandle(processInformation.hProcess);
-        CloseHandle(processInformation.hThread);
+        CloseHandle(dbgProcInfo.hProcess);
+        CloseHandle(dbgProcInfo.hThread);
     }
 }
 
 HANDLE DbgUtility::GetWindowsHandle()
 {
-    return processInformation.hProcess;
+    return dbgProcInfo.hProcess;
 }
 
 bool DbgUtility::start()
@@ -51,14 +51,14 @@ bool DbgUtility::start()
             NULL,
             NULL,
             &m_startInfo,
-            &processInformation))
+            &dbgProcInfo))
         {
             DbgUtility::dbgPrint("CreateProcess() Failed!");
             return false; // 프로세스의 생성을 실패했을 때.
         }
         
-        peParser.setFilePath(m_filePath.c_str());
-        peParser.parse();
+        dbgPEInfo.setFilePath(m_filePath.c_str());
+        dbgPEInfo.parse();
         DWORD dwContinueDebugStatus = DBG_CONTINUE;
         while (dwContinueDebugStatus && !m_stop)
         {
@@ -75,7 +75,7 @@ bool DbgUtility::start()
                 onCreateProcess(debugEvent);
                 break;
             case EXCEPTION_DEBUG_EVENT:
-                GetThreadContext(processInformation.hThread, &context);
+                GetThreadContext(dbgProcInfo.hThread, &dbgContext);
                 switch (debugEvent.u.Exception.ExceptionRecord.ExceptionCode)
                 {
                 case EXCEPTION_BREAKPOINT:
@@ -83,26 +83,26 @@ bool DbgUtility::start()
                     {
                         if (debugEvent.u.Exception.ExceptionRecord.ExceptionAddress == m_oep)
                         {
-                            LPVOID IP = (LPVOID)(--context.Eip);
-                            WriteProcessMemory(processInformation.hProcess, IP, &m_breakPoint, 1, NULL);
-                            FlushInstructionCache(processInformation.hProcess, IP, 1);
+                            LPVOID IP = (LPVOID)(--dbgContext.Eip);
+                            WriteProcessMemory(dbgProcInfo.hProcess, IP, &m_breakPoint, 1, NULL);
+                            FlushInstructionCache(dbgProcInfo.hProcess, IP, 1);
                         }
                         else {
-                            ReadProcessMemory(processInformation.hProcess, m_oep, &m_breakPoint, 1, NULL);
-                            WriteProcessMemory(processInformation.hProcess, m_oep, &m_INT3, 1, NULL);
-                            FlushInstructionCache(processInformation.hProcess, m_oep, 1);
+                            ReadProcessMemory(dbgProcInfo.hProcess, m_oep, &m_breakPoint, 1, NULL);
+                            WriteProcessMemory(dbgProcInfo.hProcess, m_oep, &m_INT3, 1, NULL);
+                            FlushInstructionCache(dbgProcInfo.hProcess, m_oep, 1);
 
                             break;
                         }
                     }
                 case EXCEPTION_SINGLE_STEP:
-                    if (m_trapFlag) context.EFlags |= 0x100; // set trap flag bit
+                    if (m_trapFlag) dbgContext.EFlags |= 0x100; // set trap flag bit
                     onExcuteOnceInstruction(debugEvent);
 
                     break;
                 }
-                context.Dr6 = 0;
-                SetThreadContext(processInformation.hThread, &context);
+                dbgContext.Dr6 = 0;
+                SetThreadContext(dbgProcInfo.hThread, &dbgContext);
                 break;
             case EXIT_PROCESS_DEBUG_EVENT:
                 dwContinueDebugStatus = 0;
@@ -299,7 +299,7 @@ std::string DbgUtility::getFileNameFromeHandle(HANDLE hFile)
 
 CONTEXT DbgUtility::getCurrentDebuggeeContext()
 {
-    return context;
+    return dbgContext;
 }
 
 void DbgUtility::setTrapFlag(bool _enable)
@@ -319,7 +319,7 @@ void DbgUtility::resume()
 
 PROCESS_INFORMATION DbgUtility::getDebuggeeProcInfo()
 {
-    return processInformation;
+    return dbgProcInfo;
 }
 
 void DbgUtility::onExcuteOnceInstruction(DEBUG_EVENT& _event){}
