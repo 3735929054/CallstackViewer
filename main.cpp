@@ -4,17 +4,17 @@
 #include <ctime>
 #include <list>
 
-class test : public DbgUtility
+class CallFlowRecorder : public DbgUtility
 {
 public:
-    test()
+    CallFlowRecorder()
     {
         fopen_s(&m_out, "eipRecord.txt", "w");
         m_width = -1;
         m_called = false;
     }
 
-    ~test()
+    ~CallFlowRecorder()
     {
         fclose(m_out);
     }
@@ -26,7 +26,7 @@ public:
 
         if (m_called)
         {
-            ReadProcessMemory(dbgProcInfo.hProcess, (LPVOID)dbgContext.Esp, (LPVOID)m_callList.back()->dwRetAddr, sizeof(DWORD), NULL);
+            ReadProcessMemory(dbgProcInfo.hProcess, (LPVOID)dbgContext.Esp, (LPVOID)&m_callList.back()->dwRetAddr, sizeof(DWORD), NULL);
             m_called = false;
         }
 
@@ -126,22 +126,17 @@ public:
 
             for (int i = 0; i < w; ++i)
                 fputs("\t", m_out);
-            sprintf_s(buf, 256, "   +----------------+\n");
+            sprintf_s(buf, 256, "+R--0x%08x---+\n", tmp->dwRetAddr);
             fputs(buf, m_out);
 
             for (int i = 0; i < w; ++i)
                 fputs("\t", m_out);
-            sprintf_s(buf, 256, "   |    [%06d]    |\n", tmp->nLoopCount);
+            sprintf_s(buf, 256, "|    [%06d]    |\n", tmp->nLoopCount);
             fputs(buf, m_out);
 
             for (int i = 0; i < w; ++i)
                 fputs("\t", m_out);
-            sprintf_s(buf, 256, "   |   0x%08x   |\n");
-            fputs(buf, m_out);
-
-            for (int i = 0; i < w; ++i)
-                fputs("\t", m_out);
-            sprintf_s(buf, 256, "   +----------------+\n");
+            sprintf_s(buf, 256, "+C--0x%08x---+\n", tmp->dwCallAddr);
             fputs(buf, m_out);
 
             iter++;
@@ -167,13 +162,13 @@ private:
 
 int main(int argc, char *argv[])
 {
-    //if (argc < 2)
-    //{
-    //    std::cout << "Usage: " << argv[0] << "\\[PROGRAM PATH]" << std::endl;;
-    //    return -1;
-    //}
+    if (argc < 2)
+    {
+        std::cout << "Usage: " << argv[0] << "\\[PROGRAM PATH]" << std::endl;;
+        return -1;
+    }
 
-    test dbg_utility;
+    CallFlowRecorder dbg_utility;
     dbg_utility.setFilePath(argv[1]);
     dbg_utility.setTrapFlag(true);
     std::cout << dbg_utility.GetTargetFileName() << std::endl;
