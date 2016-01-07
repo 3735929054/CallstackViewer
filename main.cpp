@@ -41,13 +41,13 @@ public:
         case 0xff:
             switch (opcode[1])
             {
-            case 0x15:
+            case 0x15: // call ds
                 dwCallAddr = *(DWORD*)&opcode[2];
                 m_called = true;
                 m_width++;
                 break;
 
-                //-- call [REG]
+            //-- call [REG]
             case 0xd0: //-- call eax
                 dwCallAddr = dbgContext.Eax;
                 m_called = true;
@@ -88,14 +88,19 @@ public:
                 m_called = true;
                 m_width++;
                 break;
+            case 0x55: //-- call stack segment
+                m_called = true;
+                m_width++;
+                break;
             default:
                 break;
             }
             break;
 
-            // RETN
+        // RETN
         case 0xc3:
         case 0xc2:
+        case 0xf2:
             m_width--;
             break;
         default:

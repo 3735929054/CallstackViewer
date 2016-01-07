@@ -50,10 +50,10 @@ bool PEparser::parse()
     for (int i = 0; i < m_numberOfSection; ++i)
     {
         memcpy_s(
-            &m_sectionHeaders[i],
-            sizeof(IMAGE_SECTION_HEADER),
-            (fileBuffer + (m_dosHeader.e_lfanew + offset + (sizeof(IMAGE_SECTION_HEADER) * i))),
-            sizeof(IMAGE_SECTION_HEADER));
+                &m_sectionHeaders[i],
+                sizeof(IMAGE_SECTION_HEADER),
+                (fileBuffer + (m_dosHeader.e_lfanew + offset + (sizeof(IMAGE_SECTION_HEADER) * i))),
+                sizeof(IMAGE_SECTION_HEADER));
     }
 
     // IAT
@@ -64,10 +64,10 @@ bool PEparser::parse()
     for (int i = 0; i < nImportTableSize; ++i)
     {
         memcpy_s(
-            &arrDescriptor[i],
-            sizeof(IMAGE_IMPORT_DESCRIPTOR),
-            (fileBuffer + dwImportDirectoryTableOffset) + (sizeof(IMAGE_IMPORT_DESCRIPTOR) * i),
-            sizeof(IMAGE_IMPORT_DESCRIPTOR));
+                &arrDescriptor[i],
+                sizeof(IMAGE_IMPORT_DESCRIPTOR),
+                (fileBuffer + dwImportDirectoryTableOffset) + (sizeof(IMAGE_IMPORT_DESCRIPTOR) * i),
+                sizeof(IMAGE_IMPORT_DESCRIPTOR));
     }
 
     for (int i = 0; i < nImportTableSize; ++i)

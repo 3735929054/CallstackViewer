@@ -42,16 +42,16 @@ bool DbgUtility::start()
     {
         // 프로세스 생성
         if (!CreateProcessA(
-            m_filePath.c_str(),
-            NULL,
-            NULL,
-            NULL,
-            FALSE,
-            DEBUG_PROCESS,
-            NULL,
-            NULL,
-            &m_startInfo,
-            &dbgProcInfo))
+                            m_filePath.c_str(),
+                            NULL,
+                            NULL,
+                            NULL,
+                            FALSE,
+                            DEBUG_PROCESS,
+                            NULL,
+                            NULL,
+                            &m_startInfo,
+                            &dbgProcInfo))
         {
             DbgUtility::dbgPrint("CreateProcess() Failed!");
             return false; // 프로세스의 생성을 실패했을 때.
