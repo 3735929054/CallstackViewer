@@ -141,7 +141,7 @@ bool DbgUtility::checkRemoteDbgPresent(HANDLE hProc)
     return (bDbgState) ? true : false;
 }
 
-DWORD DbgUtility::getProcessIdFromeName(std::string& process_name)
+DWORD DbgUtility::getProcessIdFromName(std::string& process_name)
 {
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
     PROCESSENTRY32 pe32 = { 0, };
@@ -165,9 +165,9 @@ DWORD DbgUtility::getProcessIdFromeName(std::string& process_name)
     return NULL;
 }
 
-HANDLE DbgUtility::getWindowsHandleFromeName(std::string& process_name)
+HANDLE DbgUtility::getWindowsHandleFromName(std::string& process_name)
 {
-    const DWORD dwDestProcId = DbgUtility::getProcessIdFromeName(process_name);
+    const DWORD dwDestProcId = DbgUtility::getProcessIdFromName(process_name);
     HANDLE  hTempWnd = FindWindow(NULL, NULL);
     DWORD   dwTempProcId = 0;
 
@@ -206,7 +206,7 @@ void DbgUtility::dbgPrint(const wchar_t *format, ...)
 }
 
 //Ref* https://msdn.microsoft.com/ko-kr/library/windows/desktop/aa366789(v=vs.85).aspx
-std::string DbgUtility::getFileNameFromeHandle(HANDLE hFile)
+std::string DbgUtility::getFileNameFromHandle(HANDLE hFile)
 {
     bool bSuccess = false;
     TCHAR pszFilename[MAX_PATH + 1];

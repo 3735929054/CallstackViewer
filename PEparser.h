@@ -25,7 +25,7 @@ public:
     void setFilePath(const char *_path);
     std::list<iatInformation> getIatInformationList() const;
     DWORD convertRvaToRaw(const DWORD p);
-    std::string getProcNameFromeAddr(const DWORD p);
+    std::string getProcNameFromAddr(const DWORD p);
 
 private:
     std::string             m_filePath;

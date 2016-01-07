@@ -144,7 +144,7 @@ const
     return m_iatList;
 }
 
-std::string PEparser::getProcNameFromeAddr(const DWORD p)
+std::string PEparser::getProcNameFromAddr(const DWORD p)
 {
     auto iter = m_iatList.begin();
     while (iter != m_iatList.end())

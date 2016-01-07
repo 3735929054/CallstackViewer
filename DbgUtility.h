@@ -29,10 +29,10 @@ public:
 
     static void dbgPrint(const char *format, ...);
     static void dbgPrint(const wchar_t *format, ...);
-    static DWORD getProcessIdFromeName(std::string& process_name);
-    static HANDLE getWindowsHandleFromeName(std::string& process_name);
+    static DWORD getProcessIdFromName(std::string& process_name);
+    static HANDLE getWindowsHandleFromName(std::string& process_name);
     static bool checkRemoteDbgPresent(HANDLE hProc);
-    static std::string getFileNameFromeHandle(HANDLE hFile);
+    static std::string getFileNameFromHandle(HANDLE hFile);
 
 private:
     bool m_trapFlag;
