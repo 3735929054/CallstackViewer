@@ -15,7 +15,7 @@ PEparser::~PEparser()
 }
 
 unsigned int PEparser::getNumberOfSection()
-{
+const {
     return m_numberOfSection;
 }
 
@@ -101,17 +101,17 @@ bool PEparser::parse()
 }
 
 IMAGE_NT_HEADERS PEparser::getNtHeader()
-{
+const {
     return m_ntHeader;
 }
 
 IMAGE_DOS_HEADER PEparser::getDosHeader()
-{
+const {
     return m_dosHeader;
 }
 
 IMAGE_SECTION_HEADER* PEparser::getSectionHeaders()
-{
+const {
     return m_sectionHeaders;
 }
 
@@ -139,8 +139,7 @@ DWORD PEparser::convertRvaToRaw(const DWORD p)
 }
 
 std::list<iatInformation> PEparser::getIatInformationList()
-const
-{
+const {
     return m_iatList;
 }
 

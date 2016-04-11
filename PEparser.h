@@ -18,14 +18,15 @@ public:
     PEparser(const char *_path = "");
     ~PEparser();
     bool parse();
-    IMAGE_NT_HEADERS32 getNtHeader();
-    IMAGE_SECTION_HEADER* getSectionHeaders();
-    IMAGE_DOS_HEADER getDosHeader();
-    unsigned int getNumberOfSection();
     void setFilePath(const char *_path);
-    std::list<iatInformation> getIatInformationList() const;
     DWORD convertRvaToRaw(const DWORD p);
     std::string getProcNameFromAddr(const DWORD p);
+
+    unsigned int getNumberOfSection() const;
+    IMAGE_NT_HEADERS32 getNtHeader() const;
+    IMAGE_SECTION_HEADER* getSectionHeaders() const;
+    IMAGE_DOS_HEADER getDosHeader() const;
+    std::list<iatInformation> getIatInformationList() const;
 
 private:
     std::string             m_filePath;
